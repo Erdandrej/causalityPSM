@@ -1,72 +1,58 @@
 from enum import Enum
+from data_generator import Generator
+from utils import select_features
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 from causality.estimation.parametric import PropensityScoreMatching
 
 
-class GenType(Enum):
-    ALL = 0
-    ONLY_TREATMENT = 1
-    ONLY_OUTCOME = 2
-    ONLY_PROPENSITY_SCORE = 3
+def sigmoid(arg):
+    return np.exp(arg) / (1. + np.exp(arg))
 
+def generatePlot(data):
+    n = list(data.keys())
+    values = list(data.values())
 
-class DataGenerator:
+    # creating the bar plot
+    plt.plot(n, values)
 
-    def generate_data_all(self, n):
-        x1 = 0.5 * np.random.normal(size=n)
-        x2 = 0.5 * np.random.normal(size=n)
-        x3 = 0.5 * np.random.normal(size=n)
+    plt.title("Error proportional to hidden variables")
+    plt.xlabel("Number of hidden variables")
+    plt.ylabel("Error")
+    plt.show()
 
-        xs = x1 + x2 + x3
-
-        arg = (xs + np.random.normal(size=n))
-        p = np.exp(arg) / (1. + np.exp(arg))
-        z = np.random.binomial(1, p)
-
-        y = (np.random.normal(size=n) + (xs + 1.) * z) + xs
-
-        X = pd.DataFrame({'z': z, 'x1': x1, 'x2': x2, 'x3': x3, 'y': y, 'p': p})
-        return X
-
-    def generate_data(self, n=1000, gen_type=GenType.ALL):
-        if gen_type == GenType.ALL:
-            return self.generate_data_all(n)
-        if gen_type == GenType.ONLY_TREATMENT:
-            return self.generate_data_all(n)
-        if gen_type == GenType.ONLY_OUTCOME:
-            return self.generate_data_all(n)
-        if gen_type == GenType.ONLY_PROPENSITY_SCORE:
-            return self.generate_data_all(n)
-
-
-class GraphGenerator:
-
-    def generateBarPlot(self, data):
-        courses = list(data.keys())
-        values = list(data.values())
-
-        # creating the bar plot
-        plt.plot(courses, values)
-
-        plt.title("Error proportional to hidden variables")
-        plt.xlabel("Number of hidden variables")
-        plt.ylabel("Error")
-        plt.show()
 
 
 if __name__ == '__main__':
-    dg = DataGenerator()
-    psm = PropensityScoreMatching()
-    gg = GraphGenerator()
+    trueATE = 1
+    # main_effect = lambda xs: np.sum(xs)
+    # treatment_effect = lambda xs: np.sum(xs) + trueATE.
+    # treatment_propensity = lambda xs: sigmoid(np.sum(xs) + np.random.normal())
+    # noise = lambda: np.random.normal()
+    # treatment_function = lambda p, n: np.random.binomial(1, p)
+    # outcome_function = lambda me, t, te, n: me + te * t + n
+    f_dimensions = 10
+    # f_distribution = [lambda: 0.5 * np.random.normal()]
+    # g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
+    #               outcome_function, f_dimensions, f_distribution)
+    # g.generate_data(1000)
 
-    X = dg.generate_data(1000, GenType.ALL)
-    ATT0 = psm.estimate_ATT(X, 'z', 'y', {'x1': 'c', 'x2': 'c', 'x3': 'c'})
-    ATT1 = psm.estimate_ATT(X, 'z', 'y', {'x1': 'c', 'x2': 'c'})
-    ATT2 = psm.estimate_ATT(X, 'z', 'y', {'x1': 'c'})
-    ATT3 = psm.estimate_ATT(X, 'z', 'y', {})
-    data = {'0': ATT0 - ATT0, '1': ATT1 - ATT0, '2': ATT2 - ATT0, '3': ATT3 - ATT0}
-    gg.generateBarPlot(data)
+    psm = PropensityScoreMatching()
+    df = pd.read_csv("data/data_dump_116905378570/generated_dataTue_May_17_13-07-59_2022.csv")
+    sel_df = select_features(df, f_dimensions)
+
+    all_f = {f'feature_{i}': 'c' for i in range(f_dimensions)}
+    psmATE = psm.estimate_ATE(df, "treatment", "outcome", all_f)
+
+    results = {}
+    for x in range(f_dimensions):
+        psmATE = psm.estimate_ATE(df, "treatment", "outcome", all_f)
+        results[x] = psmATE - trueATE
+        all_f.pop(f'feature_{x}')
+    results[f_dimensions] = psm.estimate_ATE(df, "treatment", "outcome", all_f)
+
+    generatePlot(results)
+    
