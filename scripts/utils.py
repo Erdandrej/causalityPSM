@@ -61,6 +61,9 @@ def generate_coverage_of_model_graph(model, df: pd.DataFrame, save_dir: str):
     plt.savefig(save_dir)
 
 
+def getFeatureDict(dimensions):
+    return {f'feature_{i}': 'c' for i in range(dimensions)}
+
 def powerset(set_):
     return chain.from_iterable(
         map(
@@ -78,7 +81,7 @@ def powerdict(dict_):
 
 
 def featurePowerset(dimensions):
-    all_f = {f'feature_{i}': 'c' for i in range(dimensions)}
+    all_f = getFeatureDict(dimensions)
     return list(map(dict, powerdict(all_f)))[::-1]
 
 
