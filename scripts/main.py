@@ -50,14 +50,14 @@ def generate_ehv_bar_plot(data, save=True):
     values = list(data.values())
 
     # creating the bar plot
-    plt.bar(n, values, color='y', label="Difference of PSM ATE and True ATE")
+    plt.bar(n, values, color='green', label="Difference of PSM ATE and True ATE")
     # plt.axhline(y=ground_truth, color='r', linestyle='--', label="True ATE Value")
 
     plt.title("Error when each variable is hidden separately (ATE)")
-    plt.xlabel("Variable hidden (feature_4 only affects main effect and treatment propensity)")
+    plt.xlabel("Variable hidden (feature_4 only affects treatment propensity without overlap)")
     plt.ylabel("RSE")
     # plt.legend(loc="upper left")?
-    # plt.ylim([0, 1.4])
+    plt.ylim([0, 0.25])
 
     # make file
     if save:
@@ -160,47 +160,91 @@ def generate_l1_otp_data(population, dimensions=5, gt_ate=1):
     print("Data generation done")
 
 
-def generate_l1_otetp_data(population, dimensions=5, gt_ate=1):
-    feature_function = lambda xs: np.sum(xs)
-    main_effect = lambda xs: feature_function(xs[:dimensions - 1])
-    treatment_effect = lambda xs: feature_function(xs) + gt_ate
-    treatment_propensity = lambda xs: sigmoid(feature_function(xs) + np.random.normal())
-    noise = lambda: np.random.normal()
-    treatment_function = lambda p, n: np.random.binomial(1, p)
-    outcome_function = lambda me, t, te, n: me + te * t + n
-    f_distribution = [lambda: 0.5 * np.random.normal()]
-    g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
-                  outcome_function, dimensions, f_distribution, name=f"l1_otetp_{dimensions}f")
-    g.generate_data(population)
-    print("Data generation done")
+# def generate_l1_otetp_data(population, dimensions=5, gt_ate=1):
+#     feature_function = lambda xs: np.sum(xs)
+#     main_effect = lambda xs: feature_function(xs[:dimensions - 1])
+#     treatment_effect = lambda xs: feature_function(xs) + gt_ate
+#     treatment_propensity = lambda xs: sigmoid(feature_function(xs) + np.random.normal())
+#     noise = lambda: np.random.normal()
+#     treatment_function = lambda p, n: np.random.binomial(1, p)
+#     outcome_function = lambda me, t, te, n: me + te * t + n
+#     f_distribution = [lambda: 0.5 * np.random.normal()]
+#     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
+#                   outcome_function, dimensions, f_distribution, name=f"l1_otetp_{dimensions}f")
+#     g.generate_data(population)
+#     print("Data generation done")
+#
+#
+# def generate_l1_omete_data(population, dimensions=5, gt_ate=1):
+#     feature_function = lambda xs: np.sum(xs)
+#     main_effect = lambda xs: feature_function(xs)
+#     treatment_effect = lambda xs: feature_function(xs) + gt_ate
+#     treatment_propensity = lambda xs: sigmoid(feature_function(xs[:dimensions - 1]) + np.random.normal())
+#     noise = lambda: np.random.normal()
+#     treatment_function = lambda p, n: np.random.binomial(1, p)
+#     outcome_function = lambda me, t, te, n: me + te * t + n
+#     f_distribution = [lambda: 0.5 * np.random.normal()]
+#     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
+#                   outcome_function, dimensions, f_distribution, name=f"l1_omete_{dimensions}f")
+#     g.generate_data(population)
+#     print("Data generation done")
+#
+#
+# def generate_l1_ometp_data(population, dimensions=5, gt_ate=1):
+#     feature_function = lambda xs: np.sum(xs)
+#     main_effect = lambda xs: feature_function(xs)
+#     treatment_effect = lambda xs: feature_function(xs[:dimensions - 1]) + gt_ate
+#     treatment_propensity = lambda xs: sigmoid(feature_function(xs) + np.random.normal())
+#     noise = lambda: np.random.normal()
+#     treatment_function = lambda p, n: np.random.binomial(1, p)
+#     outcome_function = lambda me, t, te, n: me + te * t + n
+#     f_distribution = [lambda: 0.5 * np.random.normal()]
+#     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
+#                   outcome_function, dimensions, f_distribution, name=f"l1_ometp_{dimensions}f")
+#     g.generate_data(population)
+#     print("Data generation done")
 
-
-def generate_l1_omete_data(population, dimensions=5, gt_ate=1):
+def generate_l1no_ome_data(population, dimensions=5, gt_ate=1):
     feature_function = lambda xs: np.sum(xs)
-    main_effect = lambda xs: feature_function(xs)
-    treatment_effect = lambda xs: feature_function(xs) + gt_ate
+    main_effect = lambda xs: xs[dimensions - 1]
+    treatment_effect = lambda xs: feature_function(xs[:dimensions - 1]) + gt_ate
     treatment_propensity = lambda xs: sigmoid(feature_function(xs[:dimensions - 1]) + np.random.normal())
     noise = lambda: np.random.normal()
     treatment_function = lambda p, n: np.random.binomial(1, p)
     outcome_function = lambda me, t, te, n: me + te * t + n
     f_distribution = [lambda: 0.5 * np.random.normal()]
     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
-                  outcome_function, dimensions, f_distribution, name=f"l1_omete_{dimensions}f")
+                  outcome_function, dimensions, f_distribution, name=f"l1no_ome_{dimensions}f")
     g.generate_data(population)
     print("Data generation done")
 
 
-def generate_l1_ometp_data(population, dimensions=5, gt_ate=1):
+def generate_l1no_ote_data(population, dimensions=5, gt_ate=1):
     feature_function = lambda xs: np.sum(xs)
-    main_effect = lambda xs: feature_function(xs)
-    treatment_effect = lambda xs: feature_function(xs[:dimensions - 1]) + gt_ate
-    treatment_propensity = lambda xs: sigmoid(feature_function(xs) + np.random.normal())
+    main_effect = lambda xs: feature_function(xs[:dimensions - 1])
+    treatment_effect = lambda xs: xs[dimensions - 1] + gt_ate
+    treatment_propensity = lambda xs: sigmoid(feature_function(xs[:dimensions - 1]) + np.random.normal())
     noise = lambda: np.random.normal()
     treatment_function = lambda p, n: np.random.binomial(1, p)
     outcome_function = lambda me, t, te, n: me + te * t + n
     f_distribution = [lambda: 0.5 * np.random.normal()]
     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
-                  outcome_function, dimensions, f_distribution, name=f"l1_ometp_{dimensions}f")
+                  outcome_function, dimensions, f_distribution, name=f"l1no_ote_{dimensions}f")
+    g.generate_data(population)
+    print("Data generation done")
+
+
+def generate_l1no_otp_data(population, dimensions=5, gt_ate=1):
+    feature_function = lambda xs: np.sum(xs)
+    main_effect = lambda xs: feature_function(xs[:dimensions - 1])
+    treatment_effect = lambda xs: feature_function(xs[:dimensions - 1]) + gt_ate
+    treatment_propensity = lambda xs: sigmoid(xs[dimensions - 1] + np.random.normal())
+    noise = lambda: np.random.normal()
+    treatment_function = lambda p, n: np.random.binomial(1, p)
+    outcome_function = lambda me, t, te, n: me + te * t + n
+    f_distribution = [lambda: 0.5 * np.random.normal()]
+    g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
+                  outcome_function, dimensions, f_distribution, name=f"l1no_otp_{dimensions}f")
     g.generate_data(population)
     print("Data generation done")
 
@@ -237,14 +281,14 @@ def experiment_effect_of_hidden_variables_ATE(df, dimensions=5):
 
 
 if __name__ == '__main__':
-    data = pd.read_csv("data/data_dump_l1_ometp_5f/generated_dataFri_May_20_12-19-05_2022.csv")
+    data = pd.read_csv("data/data_dump_l1no_otp_5f/generated_dataFri_May_20_13-03-08_2022.csv")
     f_dimensions = 5
     trueATE = 1
-    pop = 2500
+    pop = 3000
 
-    # generate_l1_omete_data(pop, f_dimensions, trueATE)
-    # generate_l1_ometp_data(pop, f_dimensions, trueATE)
-    # generate_basic_data(pop, f_dimensions, trueATE)
+    # generate_l1no_ome_data(pop, f_dimensions, trueATE)
+    # generate_l1no_ote_data(pop, f_dimensions, trueATE)
+    # generate_l1no_otp_data(pop, f_dimensions, trueATE)
 
     res = experiment_effect_of_hidden_variables_ATE(data, f_dimensions)
     generate_ehv_bar_plot(res, save=False)
