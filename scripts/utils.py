@@ -64,6 +64,7 @@ def generate_coverage_of_model_graph(model, df: pd.DataFrame, save_dir: str):
 def getFeatureDict(dimensions):
     return {f'feature_{i}': 'c' for i in range(dimensions)}
 
+
 def powerset(set_):
     return chain.from_iterable(
         map(
@@ -88,3 +89,17 @@ def featurePowerset(dimensions):
 def groupedFeaturePowerset(dimensions):
     fps = featurePowerset(dimensions)
     return [list(g) for k, g in groupby(fps, key=len)]
+
+
+def getATE(data):
+    return (data['y1'] - data['y0']).mean()
+
+
+def getATT(data):
+    t1_data = data[data['treatment'] == 1.0]
+    return (t1_data['y1'] - t1_data['y0']).mean()
+
+
+def getATC(data):
+    t0_data = data[data['treatment'] == 0.0]
+    return (t0_data['y1'] - t0_data['y0']).mean()

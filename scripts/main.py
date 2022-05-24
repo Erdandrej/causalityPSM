@@ -5,7 +5,7 @@ import warnings
 from tqdm import tqdm
 
 from data_generator import Generator
-from utils import groupedFeaturePowerset, HiddenPrints, getFeatureDict
+from utils import groupedFeaturePowerset, HiddenPrints, getFeatureDict, getATE, getATT, getATC
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -281,14 +281,28 @@ def experiment_effect_of_hidden_variables_ATE(df, dimensions=5):
 
 
 if __name__ == '__main__':
-    data = pd.read_csv("data/data_dump_l1no_otp_5f/generated_dataFri_May_20_13-03-08_2022.csv")
+    data = pd.read_csv("data/data_dump_basic_5f/generated_dataFri_May_20_11-39-10_2022.csv")
     f_dimensions = 5
     trueATE = 1
     pop = 3000
+
+    gt_ate = getATE(data)
+    gt_att = getATT(data)
+    gt_atc = getATC(data)
+
+    psm = PropensityScoreMatching()
+    all_f = getFeatureDict(f_dimensions)
+    psm_ate = psm.estimate_ATE(data, "treatment", "outcome", all_f)
+    psm_att = psm.estimate_ATT(data, "treatment", "outcome", all_f)
+    psm_atc = psm.estimate_ATC(data, "treatment", "outcome", all_f)
+
+    print("ATE", gt_ate, psm_ate)
+    print("ATT", gt_att, psm_att)
+    print("ATC", gt_atc, psm_atc)
 
     # generate_l1no_ome_data(pop, f_dimensions, trueATE)
     # generate_l1no_ote_data(pop, f_dimensions, trueATE)
     # generate_l1no_otp_data(pop, f_dimensions, trueATE)
 
-    res = experiment_effect_of_hidden_variables_ATE(data, f_dimensions)
-    generate_ehv_bar_plot(res, save=False)
+    # res = experiment_effect_of_hidden_variables_ATE(data, f_dimensions)
+    # generate_ehv_bar_plot(res, save=False)
