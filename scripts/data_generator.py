@@ -159,8 +159,9 @@ class Generator:
                 self.save_graphs()
             if show_graphs:
                 plt.show()
-        return select_features(df, self.dimensions), df['treatment'], df['outcome'], df['main_effect'], \
-               df['treatment_effect'], df['propensity'], df['y0'], df['y1'], df['noise'], df['cate']
+        # return select_features(df, self.dimensions), df['treatment'], df['outcome'], df['main_effect'], \
+        #        df['treatment_effect'], df['propensity'], df['y0'], df['y1'], df['noise'], df['cate']
+        return df
 
     def generate_row(self):
         features = []

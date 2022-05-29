@@ -5,7 +5,7 @@ import warnings
 from tqdm import tqdm
 
 from data_generator import Generator
-from utils import groupedFeaturePowerset, HiddenPrints, getFeatureDict, getATE, getATT, getATC
+from utils import groupedFeaturePowerset, HiddenPrints, getFeatureDict, getATE, getATT, getATC, getFeatureDictValues
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -45,19 +45,19 @@ def generate_envh_line_plot(data, save=True):
         plt.show()
 
 
-def generate_ehv_bar_plot(data, save=True):
+def generate_ehv_bar_plot(data, labelx="", save=True):
     n = list(data.keys())
     values = list(data.values())
 
     # creating the bar plot
-    plt.bar(n, values, color='green', label="Difference of PSM ATE and True ATE")
+    plt.bar(n, values, label="Difference of PSM ATE and True ATE")
     # plt.axhline(y=ground_truth, color='r', linestyle='--', label="True ATE Value")
 
     plt.title("Error when each variable is hidden separately (ATE)")
-    plt.xlabel("Variable hidden (feature_4 only affects treatment propensity without overlap)")
-    plt.ylabel("RSE")
+    plt.xlabel("Feature hidden" + labelx)
+    plt.ylabel("MAE")
     # plt.legend(loc="upper left")?
-    plt.ylim([0, 0.25])
+    plt.ylim([0, 0.6])
 
     # make file
     if save:
@@ -70,7 +70,7 @@ def generate_ehv_bar_plot(data, save=True):
         plt.show()
 
 
-def generate_basic_data(population, dimensions=5, gt_ate=1):
+def generate_basic_data(population, dimensions=5, gt_ate=1, save=True):
     feature_function = lambda xs: np.sum(xs)
     main_effect = lambda xs: feature_function(xs)
     treatment_effect = lambda xs: feature_function(xs) + gt_ate
@@ -81,8 +81,9 @@ def generate_basic_data(population, dimensions=5, gt_ate=1):
     f_distribution = [lambda: 0.5 * np.random.normal()]
     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
                   outcome_function, dimensions, f_distribution, name=f"basic_{dimensions}f")
-    g.generate_data(population)
-    print("Data generation done")
+    df = g.generate_data(population, save_data=save)
+    # print("Data generation done")
+    return df
 
 
 def generate_ff_sum_half_data(population, dimensions=5, gt_ate=1):
@@ -204,7 +205,7 @@ def generate_l1_otp_data(population, dimensions=5, gt_ate=1):
 #     g.generate_data(population)
 #     print("Data generation done")
 
-def generate_l1no_ome_data(population, dimensions=5, gt_ate=1):
+def generate_l1no_ome_data(population, dimensions=5, gt_ate=1, save=True):
     feature_function = lambda xs: np.sum(xs)
     main_effect = lambda xs: xs[dimensions - 1]
     treatment_effect = lambda xs: feature_function(xs[:dimensions - 1]) + gt_ate
@@ -215,11 +216,11 @@ def generate_l1no_ome_data(population, dimensions=5, gt_ate=1):
     f_distribution = [lambda: 0.5 * np.random.normal()]
     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
                   outcome_function, dimensions, f_distribution, name=f"l1no_ome_{dimensions}f")
-    g.generate_data(population)
-    print("Data generation done")
+    return g.generate_data(population, save_data=save)
+    # print("Data generation done")
 
 
-def generate_l1no_ote_data(population, dimensions=5, gt_ate=1):
+def generate_l1no_ote_data(population, dimensions=5, gt_ate=1, save=True):
     feature_function = lambda xs: np.sum(xs)
     main_effect = lambda xs: feature_function(xs[:dimensions - 1])
     treatment_effect = lambda xs: xs[dimensions - 1] + gt_ate
@@ -230,11 +231,11 @@ def generate_l1no_ote_data(population, dimensions=5, gt_ate=1):
     f_distribution = [lambda: 0.5 * np.random.normal()]
     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
                   outcome_function, dimensions, f_distribution, name=f"l1no_ote_{dimensions}f")
-    g.generate_data(population)
-    print("Data generation done")
+    return g.generate_data(population, save_data=save)
+    # print("Data generation done")
 
 
-def generate_l1no_otp_data(population, dimensions=5, gt_ate=1):
+def generate_l1no_otp_data(population, dimensions=5, gt_ate=1, save=True):
     feature_function = lambda xs: np.sum(xs)
     main_effect = lambda xs: feature_function(xs[:dimensions - 1])
     treatment_effect = lambda xs: feature_function(xs[:dimensions - 1]) + gt_ate
@@ -245,8 +246,8 @@ def generate_l1no_otp_data(population, dimensions=5, gt_ate=1):
     f_distribution = [lambda: 0.5 * np.random.normal()]
     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
                   outcome_function, dimensions, f_distribution, name=f"l1no_otp_{dimensions}f")
-    g.generate_data(population)
-    print("Data generation done")
+    return g.generate_data(population, save_data=save)
+    # print("Data generation done")
 
 
 def experiment_number_of_hidden_variables_ATE(df, dimensions=5, gt_ate=1):
@@ -265,44 +266,109 @@ def experiment_number_of_hidden_variables_ATE(df, dimensions=5, gt_ate=1):
     return results
 
 
-def experiment_effect_of_hidden_variables_ATE(df, dimensions=5):
+def experiment_effect_of_hidden_variables_ATE(df, gt, dimensions=5):
     psm = PropensityScoreMatching()
     results = {}
     all_f = getFeatureDict(dimensions)
-    full_ate = psm.estimate_ATE(df, "treatment", "outcome", all_f)
-    for i in tqdm(range(dimensions)):
+    for i in range(dimensions):
         fd = all_f.copy()
         fd.pop(f'feature_{i}')
         with HiddenPrints():
             psm_ate = psm.estimate_ATE(df, "treatment", "outcome", fd)
-        results[f'feature_{i}'] = np.sqrt(np.square(psm_ate - full_ate))
+        results[f'feature_{i}'] = np.abs(psm_ate - gt)
 
     return results
 
 
+def experiment_4_effect_of_hidden_variables_ATE(iterations, population, dimension, gte):
+    resultsBasic = []
+    for d in range(iterations):
+        data = generate_basic_data(population, dimension, gte, save=False)
+        resultsBasic.append(list(experiment_effect_of_hidden_variables_ATE(data, getATE(data), dimension).values()))
+
+    resultsOME = []
+    for d in range(iterations):
+        data = generate_l1no_ome_data(population, dimension, gte, save=False)
+        resultsOME.append(list(experiment_effect_of_hidden_variables_ATE(data, getATE(data), dimension).values()))
+
+    resultsOTE = []
+    for d in range(iterations):
+        data = generate_l1no_ote_data(population, dimension, gte, save=False)
+        resultsOTE.append(list(experiment_effect_of_hidden_variables_ATE(data, getATE(data), dimension).values()))
+
+    resultsOTP = []
+    for d in range(iterations):
+        data = generate_l1no_otp_data(population, dimension, gte, save=False)
+        resultsOTP.append(list(experiment_effect_of_hidden_variables_ATE(data, getATE(data), dimension).values()))
+
+    # res = getFeatureDictValues(
+    #     [np.mean(resultsBasic, 0), np.mean(resultsOME, 0), np.mean(resultsOTE, 0), np.mean(resultsOTP, 0)])
+
+    # generate_ehv4_bar_plot(res)
+    return np.mean(resultsBasic, 0), np.mean(resultsOME, 0), np.mean(resultsOTE, 0), np.mean(resultsOTP, 0)
+
+
 if __name__ == '__main__':
-    data = pd.read_csv("data/data_dump_basic_5f/generated_dataFri_May_20_11-39-10_2022.csv")
+    # data = pd.read_csv("data/data_dump_basic_5f/generated_dataFri_May_20_11-39-10_2022.csv")
     f_dimensions = 5
     trueATE = 1
-    pop = 3000
+    pop = 2500
+    iterations = 10
 
-    gt_ate = getATE(data)
-    gt_att = getATT(data)
-    gt_atc = getATC(data)
+    # gt_ate = getATE(data)
+    # gt_att = getATT(data)
+    # gt_atc = getATC(data)
+    # psm = PropensityScoreMatching()
+    # all_f = getFeatureDict(f_dimensions)
+    # psm_ate = psm.estimate_ATE(data, "treatment", "outcome", all_f)
+    # psm_att = psm.estimate_ATT(data, "treatment", "outcome", all_f)
+    # psm_atc = psm.estimate_ATC(data, "treatment", "outcome", all_f)
+    #
+    # print("ATE", gt_ate, psm_ate)
+    # print("ATT", gt_att, psm_att)
+    # print("ATC", gt_atc, psm_atc)
 
-    psm = PropensityScoreMatching()
-    all_f = getFeatureDict(f_dimensions)
-    psm_ate = psm.estimate_ATE(data, "treatment", "outcome", all_f)
-    psm_att = psm.estimate_ATT(data, "treatment", "outcome", all_f)
-    psm_atc = psm.estimate_ATC(data, "treatment", "outcome", all_f)
+    # # Generate evh base graph
+    # resultsBasic = []
+    # for d in range(iterations):
+    #     data = generate_basic_data(pop, f_dimensions, trueATE, save=False)
+    #     resultsBasic.append(list(experiment_effect_of_hidden_variables_ATE(data, getATE(data), f_dimensions).values()))
+    # res = np.mean(resultsBasic, 0)
+    #
+    # generate_ehv_bar_plot(getFeatureDictValues(res), labelx=" (BASE)", save=False)
 
-    print("ATE", gt_ate, psm_ate)
-    print("ATT", gt_att, psm_att)
-    print("ATC", gt_atc, psm_atc)
+    # # Generate evh base graph
+    # resultsBasic = []
+    # for d in tqdm(range(iterations)):
+    #     data = generate_basic_data(pop, f_dimensions, trueATE, save=False)
+    #     resultsBasic.append(list(experiment_effect_of_hidden_variables_ATE(data, trueATE, f_dimensions).values()))
+    # res = np.mean(resultsBasic, 0)
+    #
+    # generate_ehv_bar_plot(getFeatureDictValues(res), labelx=" (BASE)", save=False)
 
-    # generate_l1no_ome_data(pop, f_dimensions, trueATE)
-    # generate_l1no_ote_data(pop, f_dimensions, trueATE)
-    # generate_l1no_otp_data(pop, f_dimensions, trueATE)
+    # # Generate evh f_4 only main effect graph
+    # results = []
+    # for d in tqdm(range(iterations)):
+    #     data = generate_l1no_ome_data(pop, f_dimensions, trueATE, save=False)
+    #     results.append(list(experiment_effect_of_hidden_variables_ATE(data, trueATE, f_dimensions).values()))
+    # res = np.mean(results, 0)
+    #
+    # generate_ehv_bar_plot(getFeatureDictValues(res), labelx=" (F4 OME)", save=False)
 
-    # res = experiment_effect_of_hidden_variables_ATE(data, f_dimensions)
-    # generate_ehv_bar_plot(res, save=False)
+    # Generate evh f_4 only treatment effect graph
+    # results = []
+    # for d in tqdm(range(iterations)):
+    #     data = generate_l1no_ote_data(pop, f_dimensions, trueATE, save=False)
+    #     results.append(list(experiment_effect_of_hidden_variables_ATE(data, trueATE, f_dimensions).values()))
+    # res = np.mean(results, 0)
+    #
+    # generate_ehv_bar_plot(getFeatureDictValues(res), labelx=" (F4 OTE)", save=False)
+
+    # Generate evh f_4 only treatment propensity graph
+    # results = []
+    # for d in tqdm(range(iterations)):
+    #     data = generate_l1no_otp_data(pop, f_dimensions, trueATE, save=False)
+    #     results.append(list(experiment_effect_of_hidden_variables_ATE(data, trueATE, f_dimensions).values()))
+    # res = np.mean(results, 0)
+    #
+    # generate_ehv_bar_plot(getFeatureDictValues(res), labelx=" (F4 OTP)", save=False)

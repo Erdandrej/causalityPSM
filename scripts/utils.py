@@ -65,6 +65,13 @@ def getFeatureDict(dimensions):
     return {f'feature_{i}': 'c' for i in range(dimensions)}
 
 
+def getFeatureDictValues(xs):
+    results = {}
+    for i, x in enumerate(xs):
+        results[f'f_{i}'] = x
+    return results
+
+
 def powerset(set_):
     return chain.from_iterable(
         map(

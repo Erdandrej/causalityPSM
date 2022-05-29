@@ -24,8 +24,8 @@ class DifferenceInDifferences(object):
             self.model = OLS
 
     def average_treatment_effect(self, X, start='Start', end='End', assignment='assignment'):
-        test = X[X[assignment]==1][[start ,end]]
-        control = X[X[assignment]==0][[start,end]]
+        test = X[X[assignment] == 1][[start, end]]
+        control = X[X[assignment] == 0][[start, end]]
         del X
 
         test_initial = test[start]
@@ -34,25 +34,25 @@ class DifferenceInDifferences(object):
         control_final = control[end]
         del test, control
 
-        df = pd.DataFrame({'y' : test_initial,
-                   assignment : [1. for i in test_initial],
-                   't' :[0. for i in test_initial] })
-        df = df.append(pd.DataFrame({'y' : test_final,
-                                     assignment : [1. for i in test_final],
-                                     't' :[1. for i in test_final] }))
+        df = pd.DataFrame({'y': test_initial,
+                           assignment: [1. for i in test_initial],
+                           't': [0. for i in test_initial]})
+        df = df.append(pd.DataFrame({'y': test_final,
+                                     assignment: [1. for i in test_final],
+                                     't': [1. for i in test_final]}))
 
-        df = df.append(pd.DataFrame({'y' : control_initial,
-                                     assignment : [0. for i in control_initial],
-                                     't' :[0. for i in control_initial] }))
+        df = df.append(pd.DataFrame({'y': control_initial,
+                                     assignment: [0. for i in control_initial],
+                                     't': [0. for i in control_initial]}))
 
-        df = df.append(pd.DataFrame({'y' : control_final,
-                                     assignment : [0. for i in control_final],
-                                     't' :[1. for i in control_final] }))
+        df = df.append(pd.DataFrame({'y': control_final,
+                                     assignment: [0. for i in control_final],
+                                     't': [1. for i in control_final]}))
         del test_initial, test_final, control_initial, control_final
         df['did'] = df['t'] * df[assignment]
         df['intercept'] = 1.
 
-        model = self.model(df['y'], df[['t', assignment,'did', 'intercept']])
+        model = self.model(df['y'], df[['t', assignment, 'did', 'intercept']])
         result = model.fit()
         conf_int = result.conf_int().ix['did']
         expected = result.params['did']
@@ -71,17 +71,19 @@ class DifferenceInDifferences(object):
         time is some time before the experiment is run, and
         the end time is the starting point for the experiment.
         """
-        lower, exp, upper = self.average_treatment_effect(X,start=start, end=end, assignment=assignment)
+        lower, exp, upper = self.average_treatment_effect(X, start=start, end=end, assignment=assignment)
         if lower <= 0 <= upper:
             return True
         return False
+
 
 class PropensityScoringModel(object):
     def __init__(self):
         # change the model if there are multiple matches per treated!
         self.propensity_score_model = None
 
-    def score(self, X, confounder_types, assignment='assignment', store_model_fit=False, intercept=True, propensity_score_name='propensity score'):
+    def score(self, X, confounder_types, assignment='assignment', store_model_fit=False, intercept=True,
+              propensity_score_name='propensity score'):
         """
         Fit a propensity score model using the data in X and the confounders listed in confounder_types. This adds
         the propensity scores to the dataframe, and returns the new dataframe.
@@ -120,6 +122,7 @@ class PropensityScoringModel(object):
             self.propensity_score_model = model
         X.loc[:, propensity_score_name] = model.predict(df[regression_confounders])
         return X
+
 
 class PropensityScoreMatching(PropensityScoringModel):
     def __init__(self):
@@ -162,7 +165,8 @@ class PropensityScoreMatching(PropensityScoringModel):
         """
         neighbor_search = NearestNeighbors(metric='euclidean', n_neighbors=n_neighbors)
         neighbor_search.fit(control[[score]].values)
-        treated.loc[:, 'matches'] = treated[score].apply(lambda x: self.get_matches(x, control, neighbor_search, score, n_neighbors))
+        treated.loc[:, 'matches'] = treated[score].apply(
+            lambda x: self.get_matches(x, control, neighbor_search, score, n_neighbors))
         join_data = []
         for treatment_index, row in treated.iterrows():
             matches = row['matches'].flatten()
@@ -188,7 +192,8 @@ class PropensityScoreMatching(PropensityScoringModel):
         """
         neighbor_search = NearestNeighbors(metric='euclidean', n_neighbors=n_neighbors)
         neighbor_search.fit(treated[[score]].values)
-        control.loc[:, 'matches'] = control[score].apply(lambda x: self.get_matches(x, treated, neighbor_search, score, n_neighbors))
+        control.loc[:, 'matches'] = control[score].apply(
+            lambda x: self.get_matches(x, treated, neighbor_search, score, n_neighbors))
         join_data = []
         for control_index, row in control.iterrows():
             matches = row['matches'].flatten()
@@ -201,7 +206,6 @@ class PropensityScoreMatching(PropensityScoringModel):
         matched_treated.loc[:, 'weight'] = 1. / float(n_neighbors)
         control.loc[:, 'weight'] = 1.
         return matched_treated, control
-
 
     def get_matches(self, score, potential_matches, knn, score_name, n_neighbors):
         """
@@ -216,12 +220,11 @@ class PropensityScoreMatching(PropensityScoringModel):
         :param n_neighbors: The number of matches we'd like
         :return: The indices of the matched units in the dataframe of potential matches.
         """
-        max_distance = max(knn.kneighbors([[score]])[0].flatten()) # max(knn.kneighbors(score)[0].flatten())
+        max_distance = max(knn.kneighbors([[score]])[0].flatten())  # max(knn.kneighbors(score)[0].flatten())
         lower_score = score - max_distance
         upper_score = score + max_distance
         gt = potential_matches[potential_matches[score_name] >= lower_score]
-        return gt[gt[score_name] <= upper_score].sample(n_neighbors).index.values
-
+        return gt[gt[score_name] <= upper_score].sample(n_neighbors, replace=True).index.values
 
     def estimate_treatments(self, treatments, matched_control, outcome):
         """
@@ -255,9 +258,10 @@ class PropensityScoreMatching(PropensityScoringModel):
         :return: a float representing the treatment effect on the treated
         """
         df = self.score(X, confounder_types, assignment).copy()
-        treatments, matched_control = self.match(df, assignment=assignment, score='propensity score', n_neighbors=n_neighbors)
+        treatments, matched_control = self.match(df, assignment=assignment, score='propensity score',
+                                                 n_neighbors=n_neighbors)
         df = treatments.append(matched_control)
-        return self.get_weighted_effect_estimate(assignment, df, outcome, bootstrap=bootstrap)#estimate_ATT(df)
+        return self.get_weighted_effect_estimate(assignment, df, outcome, bootstrap=bootstrap)  # estimate_ATT(df)
 
     def estimate_ATC(self, X, assignment, outcome, confounder_types, n_neighbors=5, bootstrap=False):
         """
@@ -297,22 +301,21 @@ class PropensityScoreMatching(PropensityScoringModel):
             X = self.score(X, confounder_types, assignment)
             score = 'propensity score'
         treated, control = self.match(X, assignment=assignment, score=score, n_neighbors=n_neighbors, treated_value=1,
-              control_value=0, match_to='all')
+                                      control_value=0, match_to='all')
         return self.get_weighted_effect_estimate(assignment, treated.append(control), outcome, bootstrap=bootstrap)
-
 
     def get_weighted_effect_estimate(self, assignment, df, outcome, bootstrap=False):
         def estimate(df):
             treated = df[df[assignment] == 1]
             control = df[df[assignment] == 0]
-            treated_outcome = (treated[outcome]*treated['weight']).sum() / treated['weight'].sum()
-            control_outcome = (control[outcome]*control['weight']).sum() / control['weight'].sum()
+            treated_outcome = (treated[outcome] * treated['weight']).sum() / treated['weight'].sum()
+            control_outcome = (control[outcome] * control['weight']).sum() / control['weight'].sum()
             return treated_outcome - control_outcome
+
         if bootstrap:
             return bootstrap_statistic(df, estimate)
         else:
             return estimate(df)
-
 
     def assess_balance(self, X, assignment, confounder_types):
         """
@@ -353,7 +356,7 @@ class PropensityScoreMatching(PropensityScoringModel):
         :return:
         """
         numerator = X[X[d] == 1].mean()[x] - X[X[d] == 0].mean()[x]
-        denominator = np.sqrt((X[X[d] == 1].var()[x] + X[X[d] == 0].var()[x])/2.)
+        denominator = np.sqrt((X[X[d] == 1].var()[x] + X[X[d] == 0].var()[x]) / 2.)
         return numerator / denominator
 
     def check_support(self, X, assignment, confounder_types=None):
@@ -395,22 +398,26 @@ class InverseProbabilityWeightedLS(PropensityScoringModel):
                                  weight_name=weight_name,
                                  effect=effect)
         self.fit_WLS(X, assignment, outcome, confounder_types, weight_name=weight_name, intercept=ols_intercept)
-        return self.wls_model.conf_int().transpose()[assignment][0], self.wls_model.params[assignment], self.wls_model.conf_int().transpose()[assignment][1]
+        return self.wls_model.conf_int().transpose()[assignment][0], self.wls_model.params[assignment], \
+               self.wls_model.conf_int().transpose()[assignment][1]
 
     def estimate_ATE(self, X, assignment, outcome, confounder_types, propensity_score_name='propensity score',
                      additional_weight_column=None, weight_name='weights', ols_intercept='True'):
         return self.estimate_effect(X, assignment, outcome, confounder_types, propensity_score_name='propensity score',
-                                    additional_weight_column=None, weight_name='weights', ols_intercept='True', effect='ATE')
+                                    additional_weight_column=None, weight_name='weights', ols_intercept='True',
+                                    effect='ATE')
 
     def estimate_ATC(self, X, assignment, outcome, confounder_types, propensity_score_name='propensity score',
                      additional_weight_column=None, weight_name='weights', ols_intercept='True'):
         return self.estimate_effect(X, assignment, outcome, confounder_types, propensity_score_name='propensity score',
-                                    additional_weight_column=None, weight_name='weights', ols_intercept='True', effect='ATC')
+                                    additional_weight_column=None, weight_name='weights', ols_intercept='True',
+                                    effect='ATC')
 
     def estimate_ATT(self, X, assignment, outcome, confounder_types, propensity_score_name='propensity score',
                      additional_weight_column=None, weight_name='weights', ols_intercept='True'):
         return self.estimate_effect(X, assignment, outcome, confounder_types, propensity_score_name='propensity score',
-                                    additional_weight_column=None, weight_name='weights', ols_intercept='True', effect='ATT')
+                                    additional_weight_column=None, weight_name='weights', ols_intercept='True',
+                                    effect='ATT')
 
     def compute_weights(self, X, assignment, outcome, confounder_types, propensity_score_name='propensity score',
                         additional_weight_column=None, weight_name='weights', effect='ATE'):
@@ -421,11 +428,14 @@ class InverseProbabilityWeightedLS(PropensityScoringModel):
                        intercept=True,
                        propensity_score_name=propensity_score_name)
         if effect == 'ATE':
-            X.loc[:, weight_name] = (X[assignment] == 1) / X[propensity_score_name] + (X[assignment] == 0) / (1. - X[propensity_score_name])
+            X.loc[:, weight_name] = (X[assignment] == 1) / X[propensity_score_name] + (X[assignment] == 0) / (
+                        1. - X[propensity_score_name])
         elif effect == 'ATC':
-            X.loc[:, weight_name] = (X[assignment] == 1) * (1. - X[propensity_score_name]) / X[propensity_score_name] + (X[assignment] == 0) * 1.
+            X.loc[:, weight_name] = (X[assignment] == 1) * (1. - X[propensity_score_name]) / X[
+                propensity_score_name] + (X[assignment] == 0) * 1.
         elif effect == 'ATT':
-            X.loc[:, weight_name] = (X[assignment] == 1) * 1. + (X[assignment] == 0) * X[propensity_score_name] / (1. - X[propensity_score_name])
+            X.loc[:, weight_name] = (X[assignment] == 1) * 1. + (X[assignment] == 0) * X[propensity_score_name] / (
+                        1. - X[propensity_score_name])
         else:
             raise Exception('Effect {} not recognized'.format(effect))
 
