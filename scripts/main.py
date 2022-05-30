@@ -2,8 +2,8 @@ import os
 import time
 import warnings
 
-from sklearn.linear_model import LinearRegression
 from tqdm import tqdm
+from sklearn import linear_model
 
 from data_generator import Generator
 from utils import groupedFeaturePowerset, HiddenPrints, getFeatureDict, getATE, getATT, getATC, getFeatureDictValues
@@ -87,6 +87,38 @@ def generate_basic_data(population, dimensions=5, gt_ate=1, save=True):
     return df
 
 
+def generate_ff_halfsum_data(population, dimensions=5, gt_ate=1, save=True):
+    feature_function = lambda xs: np.sum(xs[: int(len(xs) / 2 + 1)])
+    main_effect = lambda xs: feature_function(xs)
+    treatment_effect = lambda xs: feature_function(xs) + gt_ate
+    treatment_propensity = lambda xs: sigmoid(feature_function(xs) + np.random.normal())
+    noise = lambda: np.random.normal()
+    treatment_function = lambda p, n: np.random.binomial(1, p)
+    outcome_function = lambda me, t, te, n: me + te * t + n
+    f_distribution = [lambda: 0.5 * np.random.normal()]
+    g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
+                  outcome_function, dimensions, f_distribution, name=f"basic_{dimensions}f")
+    df = g.generate_data(population, save_data=save)
+    # print("Data generation done")
+    return df
+
+
+def generate_ff_prod_data(population, dimensions=5, gt_ate=1, save=True):
+    feature_function = lambda xs: np.prod(xs)
+    main_effect = lambda xs: feature_function(xs)
+    treatment_effect = lambda xs: feature_function(xs) + gt_ate
+    treatment_propensity = lambda xs: sigmoid(feature_function(xs) + np.random.normal())
+    noise = lambda: np.random.normal()
+    treatment_function = lambda p, n: np.random.binomial(1, p)
+    outcome_function = lambda me, t, te, n: me + te * t + n
+    f_distribution = [lambda: 0.5 * np.random.normal()]
+    g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
+                  outcome_function, dimensions, f_distribution, name=f"basic_{dimensions}f")
+    df = g.generate_data(population, save_data=save)
+    # print("Data generation done")
+    return df
+
+
 def generate_common_experiment_data(population, dimensions=8, gt=1, save=True):
     main_effect = lambda xs: xs[0] + xs[1]
     treatment_effect = lambda xs: xs[2] + xs[3] + gt
@@ -102,34 +134,6 @@ def generate_common_experiment_data(population, dimensions=8, gt=1, save=True):
     return df
 
 
-# def generate_ff_sum_half_data(population, dimensions=5, gt_ate=1):
-#     feature_function = lambda xs: np.sum(xs[: int(len(xs) / 2 + 1)])
-#     main_effect = lambda xs: feature_function(xs)
-#     treatment_effect = lambda xs: feature_function(xs) + gt_ate
-#     treatment_propensity = lambda xs: sigmoid(feature_function(xs) + np.random.normal())
-#     noise = lambda: np.random.normal()
-#     treatment_function = lambda p, n: np.random.binomial(1, p)
-#     outcome_function = lambda me, t, te, n: me + te * t + n
-#     f_distribution = [lambda: 0.5 * np.random.normal()]
-#     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
-#                   outcome_function, dimensions, f_distribution, name=f"ff_sum_half_{dimensions}f")
-#     g.generate_data(population)
-#     print("Data generation done")
-#
-#
-# def generate_ff_prod_data(population, dimensions=5, gt_ate=1):
-#     feature_function = lambda xs: np.prod(xs)
-#     main_effect = lambda xs: feature_function(xs)
-#     treatment_effect = lambda xs: feature_function(xs) + gt_ate
-#     treatment_propensity = lambda xs: sigmoid(feature_function(xs) + np.random.normal())
-#     noise = lambda: np.random.normal()
-#     treatment_function = lambda p, n: np.random.binomial(1, p)
-#     outcome_function = lambda me, t, te, n: me + te * t + n
-#     f_distribution = [lambda: 0.5 * np.random.normal()]
-#     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
-#                   outcome_function, dimensions, f_distribution, name=f"ff_prod_{dimensions}f")
-#     g.generate_data(population)
-#     print("Data generation done")
 #
 #
 # def generate_l1_ome_data(population, dimensions=5, gt_ate=1):
@@ -382,7 +386,7 @@ def experiment_effect_of_hidden_variables_ATE(df, gt, dimensions=5):
 #     # generate_ehv_bar_plot(getFeatureDictValues(res), labelx=" (F4 OTP)", save=False)
 
 
-def generate_common_missing_variables(i=100, ex_features=None):
+def generate_common_missing_variables(i=100, ex_features=None, f_dimensions=8, gt=1):
     if ex_features is None:
         ex_features = []
     df = pd.read_csv("data/data_dump_common_8f/generated_dataSun_May_29_19-55-12_2022.csv")
@@ -394,7 +398,7 @@ def generate_common_missing_variables(i=100, ex_features=None):
     for x in tqdm(range(i)):
         with HiddenPrints():
             psm_ate = psm.estimate_ATE(df, "treatment", "outcome", fd)
-        res.append(np.abs(psm_ate - trueATE))
+        res.append(np.abs(psm_ate - gt))
     return res
 
 
@@ -530,12 +534,56 @@ def graph_nc_common_hidden_variables_ATE():
     plt.show()
 
 
-if __name__ == '__main__':
-    # data = pd.read_csv("data/data_dump_basic_5f/generated_dataFri_May_20_11-39-10_2022.csv")
-    f_dimensions = 8
-    trueATE = 1
-    pop = 5000
-    iterations = 100
+def evh_final():
+    labels = ['f_0', 'f_1', 'f_2', 'f_3', 'f_4']
+    base_d = [0.29970, 0.29077, 0.32853, 0.32705, 0.31669]
+    f4ome_d = [0.11514, 0.12383, 0.11424, 0.10645, 0.05896]
+    f4ote_d = [0.21734, 0.20527, 0.21034, 0.22013, 0.05151]
+    f4otp_d = [0.05386, 0.06667, 0.06107, 0.07350, 0.05455]
 
-    # experiment_nc_common_missing_variables_ATE()
-    graph_te_common_hidden_variables_ATE()
+    x = np.arange(len(labels))  # the label locations
+    width = 0.2  # the width of the bars
+
+    fig, ax = plt.subplots()
+    rects1 = ax.bar(x - width * (3 / 2), base_d, width, label='A')
+    rects2 = ax.bar(x - width / 2, f4ome_d, width, label='B')
+    rects3 = ax.bar(x + width / 2, f4ote_d, width, label='C')
+    rects4 = ax.bar(x + width * (3 / 2), f4otp_d, width, label='D')
+
+    # Add some text for labels, title and custom x-axis tick labels, etc.
+    ax.set_xlabel('Feature Hidden')
+    ax.set_ylabel('MAE')
+    ax.set_title('Error when each variable is hidden separately (ATE)')
+    ax.set_xticks(x, labels)
+    ax.legend()
+
+    plt.show()
+
+def enhv_final():
+    res_sum = {0: 0.028011694277565558, 1: 0.29120315354215814, 2: 0.5822664872520664, 3: 0.8418340820445402,
+               4: 1.088108762834208, 5: 1.3296631577041529}
+    res_halfsum = {0: 0.05336224742631979, 1: 0.19907319028230752, 2: 0.356746262364021, 3: 0.5117188249007243,
+                   4: 0.6515336231382258, 5: 0.8205361686045007}
+    res_prod = {0: 0.03589294726036518, 1: 0.04044396377735471, 2: 0.04803591514946497, 3: 0.04173829717406647,
+                4: 0.050202417936116524, 5: 0.03865739188555739}
+
+    plt.plot(res_sum.keys(), res_sum.values(), label="A")
+    plt.plot(res_halfsum.keys(), res_halfsum.values(), label="B")
+    plt.plot(res_prod.keys(), res_prod.values(), label="C")
+    plt.title("Error proportional to hidden variables (ATE)")
+    plt.xlabel("Number of hidden variables")
+    plt.ylabel("RMSE")
+    plt.legend()
+    # plt.show()
+
+if __name__ == '__main__':
+    # data = pd.read_csv("data/data_dump_common_8f/generated_dataSun_May_29_19-55-12_2022.csv")
+    # f_dimensions = 5
+    # trueATE = 1
+    # pop = 5000
+    # iterations = 100
+
+    enhv_final()
+    evh_final()
+
+
