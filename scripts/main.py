@@ -87,6 +87,38 @@ def generate_basic_data(population, dimensions=5, gt_ate=1, save=True):
     return df
 
 
+def generate_3cv_3ncf_data(population, dimensions=6, gt_ate=1, save=False):
+    feature_function = lambda xs: np.sum(xs)
+    main_effect = lambda xs: feature_function(xs[0:3])
+    treatment_effect = lambda xs: feature_function(xs[0:3]) + gt_ate
+    treatment_propensity = lambda xs: sigmoid(feature_function(xs[0:3]) + np.random.normal())
+    noise = lambda: np.random.normal()
+    treatment_function = lambda p, n: np.random.binomial(1, p)
+    outcome_function = lambda me, t, te, n: me + te * t + n
+    f_distribution = [lambda: 0.5 * np.random.normal()]
+    g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
+                  outcome_function, dimensions, f_distribution, name=f"basic_{dimensions}f")
+    df = g.generate_data(population, save_data=save)
+    # print("Data generation done")
+    return df
+
+
+def generate_f4me_data(population, dimensions=5, gt_ate=1, save=True):
+    feature_function = lambda xs: np.sum(xs)
+    main_effect = lambda xs: feature_function(xs)
+    treatment_effect = lambda xs: feature_function(xs) + gt_ate
+    treatment_propensity = lambda xs: sigmoid(feature_function(xs) + np.random.normal())
+    noise = lambda: np.random.normal()
+    treatment_function = lambda p, n: np.random.binomial(1, p)
+    outcome_function = lambda me, t, te, n: me + te * t + n
+    f_distribution = [lambda: 0.5 * np.random.normal()]
+    g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
+                  outcome_function, dimensions, f_distribution, name=f"basic_{dimensions}f")
+    df = g.generate_data(population, save_data=save)
+    # print("Data generation done")
+    return df
+
+
 def generate_ff_halfsum_data(population, dimensions=5, gt_ate=1, save=True):
     feature_function = lambda xs: np.sum(xs[: int(len(xs) / 2 + 1)])
     main_effect = lambda xs: feature_function(xs)
@@ -386,10 +418,9 @@ def experiment_effect_of_hidden_variables_ATE(df, gt, dimensions=5):
 #     # generate_ehv_bar_plot(getFeatureDictValues(res), labelx=" (F4 OTP)", save=False)
 
 
-def generate_common_missing_variables(i=100, ex_features=None, f_dimensions=8, gt=1):
+def generate_common_missing_variables(i=100, ex_features=None, f_dimensions=6, gt=1):
     if ex_features is None:
         ex_features = []
-    df = pd.read_csv("data/data_dump_common_8f/generated_dataSun_May_29_19-55-12_2022.csv")
     psm = PropensityScoreMatching()
     fd = getFeatureDict(f_dimensions)
     for exf in ex_features:
@@ -397,141 +428,246 @@ def generate_common_missing_variables(i=100, ex_features=None, f_dimensions=8, g
     res = []
     for x in tqdm(range(i)):
         with HiddenPrints():
-            psm_ate = psm.estimate_ATE(df, "treatment", "outcome", fd)
+            psm_ate = psm.estimate_ATE(generate_3cv_3ncf_data(2500, save=False), "treatment", "outcome", fd)
         res.append(np.abs(psm_ate - gt))
     return res
 
 
-def experiment_me_common_missing_variables_ATE(i=100):
+def estimate_ATE_Linear_Regression(df, fd):
+    features = fd.keys()
+    t0_data = df[df['treatment'] == 0.0]
+    t1_data = df[df['treatment'] == 1.0]
+
+    t0_X = t0_data[features].to_numpy().tolist()
+    t0_y = t0_data['outcome'].tolist()
+
+    t1_X = t1_data[features].to_numpy().tolist()
+    t1_y = t1_data['outcome'].tolist()
+
+    regY0 = linear_model.LinearRegression()
+    regY0.fit(t0_X, t0_y)
+
+    regY1 = linear_model.LinearRegression()
+    regY1.fit(t1_X, t1_y)
+
+    res = (regY1.predict(df[features].to_numpy()) - regY0.predict(df[features].to_numpy())).mean()
+    return res
+
+
+def generate_common_missing_variables_linear_regression(i=100, ex_features=None, f_dimensions=6, gt=1):
+    if ex_features is None:
+        ex_features = []
+    fd = getFeatureDict(f_dimensions)
+    for exf in ex_features:
+        fd.pop(exf)
+    res = []
+    for x in tqdm(range(i)):
+        with HiddenPrints():
+            lr_ate = estimate_ATE_Linear_Regression(generate_3cv_3ncf_data(2500, save=False), fd)
+        res.append(np.abs(lr_ate - gt))
+    return res
+
+
+def experiment_common_missing_variables_ATE(i=100):
+    b = generate_common_missing_variables(i)
     f0 = generate_common_missing_variables(i, ex_features=["feature_0"])
     f1 = generate_common_missing_variables(i, ex_features=["feature_1"])
-    f01 = generate_common_missing_variables(i, ex_features=["feature_0", "feature_1"])
+    f2 = generate_common_missing_variables(i, ex_features=["feature_2"])
+    f3 = generate_common_missing_variables(i, ex_features=["feature_3"])
+    f4 = generate_common_missing_variables(i, ex_features=["feature_4"])
+    f5 = generate_common_missing_variables(i, ex_features=["feature_5"])
     data = pd.DataFrame(
-        {"Baseline": pd.read_csv("data/baseline_common_missing_variables_res")["Baseline"].tolist()[:i],
+        {"Baseline": b,
          "Feature 0 is hidden": f0,
          "Feature 1 is hidden": f1,
-         "Features 0 and 1 are hidden": f01})
-    data.to_csv("data/me_common_missing_variables_test")
+         "Feature 2 is hidden": f2,
+         "Feature 3 is hidden": f3,
+         "Feature 4 is hidden": f4,
+         "Feature 5 is hidden": f5})
+    data.to_csv("data/common_missing_variables_test")
     data.boxplot(vert=False)
     plt.xlabel(f"Absolute Error ({i} iterations)")
-    plt.title("Error variance compared to true ATE | Main Effect")
+    plt.title("Error variance compared to true ATE | PSM")
     plt.subplots_adjust(left=0.35)
     plt.show()
 
 
-def experiment_te_common_missing_variables_ATE(i=100):
-    f0 = generate_common_missing_variables(i, ex_features=["feature_2"])
-    f1 = generate_common_missing_variables(i, ex_features=["feature_3"])
-    f01 = generate_common_missing_variables(i, ex_features=["feature_2", "feature_3"])
+def experiment_common_missing_variables_ATE_LR(i=100):
+    b = generate_common_missing_variables_linear_regression(i)
+    f0 = generate_common_missing_variables_linear_regression(i, ex_features=["feature_0"])
+    f1 = generate_common_missing_variables_linear_regression(i, ex_features=["feature_1"])
+    f2 = generate_common_missing_variables_linear_regression(i, ex_features=["feature_2"])
+    f3 = generate_common_missing_variables_linear_regression(i, ex_features=["feature_3"])
+    f4 = generate_common_missing_variables_linear_regression(i, ex_features=["feature_4"])
+    f5 = generate_common_missing_variables_linear_regression(i, ex_features=["feature_5"])
     data = pd.DataFrame(
-        {"Baseline": pd.read_csv("data/baseline_common_missing_variables_res")["Baseline"].tolist()[:i],
-         "Feature 2 is hidden": f0,
-         "Feature 3 is hidden": f1,
-         "Features 2 and 3 are hidden": f01})
-    data.to_csv("data/te_common_missing_variables_test")
+        {"Baseline": b,
+         "Feature 0 is hidden": f0,
+         "Feature 1 is hidden": f1,
+         "Feature 2 is hidden": f2,
+         "Feature 3 is hidden": f3,
+         "Feature 4 is hidden": f4,
+         "Feature 5 is hidden": f5})
+    data.to_csv("data/common_missing_variables_test")
     data.boxplot(vert=False)
     plt.xlabel(f"Absolute Error ({i} iterations)")
-    plt.title("Error variance compared to true ATE | Treatment Effect")
+    plt.title("Error variance compared to true ATE | Linear Regression")
     plt.subplots_adjust(left=0.35)
     plt.show()
 
 
-def experiment_tp_common_missing_variables_ATE(i=100):
-    f0 = generate_common_missing_variables(i, ex_features=["feature_4"])
-    f1 = generate_common_missing_variables(i, ex_features=["feature_5"])
-    f01 = generate_common_missing_variables(i, ex_features=["feature_4", "feature_5"])
-    data = pd.DataFrame(
-        {"Baseline": pd.read_csv("data/baseline_common_missing_variables_res")["Baseline"].tolist()[:i],
-         "Feature 4 is hidden": f0,
-         "Feature 5 is hidden": f1,
-         "Features 4 and 5 are hidden": f01})
-    data.to_csv("data/tp_common_missing_variables_test")
-    data.boxplot(vert=False)
-    plt.xlabel(f"Absolute Error ({i} iterations)")
-    plt.title("Error variance compared to true ATE | Treatment Propensity")
-    plt.subplots_adjust(left=0.35)
-    plt.show()
-
-
-def experiment_nc_common_missing_variables_ATE(i=100):
-    f0 = generate_common_missing_variables(i, ex_features=["feature_6"])
-    f1 = generate_common_missing_variables(i, ex_features=["feature_7"])
-    f01 = generate_common_missing_variables(i, ex_features=["feature_6", "feature_7"])
-    data = pd.DataFrame(
-        {"Baseline": pd.read_csv("data/baseline_common_missing_variables_res")["Baseline"].tolist()[:i],
-         "Feature 6 is hidden": f0,
-         "Feature 7 is hidden": f1,
-         "Features 6 and 7 are hidden": f01})
-    data.to_csv("data/nc_common_missing_variables_test")
-    data.boxplot(vert=False)
-    plt.xlabel(f"Absolute Error ({i} iterations)")
-    plt.title("Error variance compared to true ATE | Non-Confounders")
-    plt.subplots_adjust(left=0.35)
-    plt.show()
-
-
-def graph_me_common_hidden_variables_ATE():
-    data = pd.DataFrame(
-        {"Baseline": pd.read_csv("data/me_common_missing_variables_res")["Baseline"].tolist(),
-         "Feature 0 is hidden": pd.read_csv("data/me_common_missing_variables_res")[
-             "Feature 0 is hidden"].tolist(),
-         "Feature 1 is hidden": pd.read_csv("data/me_common_missing_variables_res")[
-             "Feature 1 is hidden"].tolist(),
-         "Features 0 and 1 are hidden": pd.read_csv("data/me_common_missing_variables_res")[
-             "Features 0 and 1 are hidden"].tolist()})
-    data.boxplot(vert=False)
-    plt.xlabel("Absolute Error (100 iterations)")
-    plt.title("Error variance compared to true ATE | Main Effect")
-    plt.subplots_adjust(left=0.35)
-    plt.show()
-
-
-def graph_te_common_hidden_variables_ATE():
-    data = pd.DataFrame(
-        {"Baseline": pd.read_csv("data/te_common_missing_variables_test")["Baseline"].tolist(),
-         "Feature 2 is hidden": pd.read_csv("data/te_common_missing_variables_test")[
-             "Feature 2 is hidden"].tolist(),
-         "Feature 3 is hidden": pd.read_csv("data/te_common_missing_variables_test")[
-             "Feature 3 is hidden"].tolist(),
-         "Features 2 and 3 are hidden": pd.read_csv("data/te_common_missing_variables_test")[
-             "Features 2 and 3 are hidden"].tolist()})
-    data.boxplot(vert=False)
-    plt.xlabel("Absolute Error (100 iterations)")
-    plt.title("Error variance compared to true ATE | Treatment Effect")
-    plt.subplots_adjust(left=0.35)
-    plt.show()
-
-
-def graph_tp_common_hidden_variables_ATE():
-    data = pd.DataFrame(
-        {"Baseline": pd.read_csv("data/tp_common_missing_variables_test")["Baseline"].tolist(),
-         "Feature 4 is hidden": pd.read_csv("data/tp_common_missing_variables_test")[
-             "Feature 4 is hidden"].tolist(),
-         "Feature 5 is hidden": pd.read_csv("data/tp_common_missing_variables_test")[
-             "Feature 5 is hidden"].tolist(),
-         "Features 4 and 5 are hidden": pd.read_csv("data/tp_common_missing_variables_test")[
-             "Features 4 and 5 are hidden"].tolist()})
-    data.boxplot(vert=False)
-    plt.xlabel("Absolute Error (100 iterations)")
-    plt.title("Error variance compared to true ATE | Treatment Propensity")
-    plt.subplots_adjust(left=0.35)
-    plt.show()
-
-
-def graph_nc_common_hidden_variables_ATE():
-    data = pd.DataFrame(
-        {"Baseline": pd.read_csv("data/nc_common_missing_variables_test")["Baseline"].tolist(),
-         "Feature 6 is hidden": pd.read_csv("data/nc_common_missing_variables_test")[
-             "Feature 6 is hidden"].tolist(),
-         "Feature 7 is hidden": pd.read_csv("data/nc_common_missing_variables_test")[
-             "Feature 7 is hidden"].tolist(),
-         "Features 6 and 7 are hidden": pd.read_csv("data/nc_common_missing_variables_test")[
-             "Features 6 and 7 are hidden"].tolist()})
-    data.boxplot(vert=False)
-    plt.xlabel("Absolute Error (100 iterations)")
-    plt.title("Error variance compared to true ATE | Non-Confounders")
-    plt.subplots_adjust(left=0.35)
-    plt.show()
+# def experiment_common_missing_variables_ATE(i=100):
+#     # b = generate_common_missing_variables(i)
+#     # f0 = generate_common_missing_variables(i, ex_features=["feature_0"])
+#     # f1 = generate_common_missing_variables(i, ex_features=["feature_1"])
+#     # f2 = generate_common_missing_variables(i, ex_features=["feature_2"])
+#     # f3 = generate_common_missing_variables(i, ex_features=["feature_3"])
+#     # f4 = generate_common_missing_variables(i, ex_features=["feature_4"])
+#     data = pd.DataFrame(
+#         {"Baseline": pd.read_csv('data/common_missing_variables_test')["Baseline"].tolist(),
+#          "Feature 0 is hidden": pd.read_csv('data/common_missing_variables_test')["Feature 0 is hidden"].tolist(),
+#          "Feature 1 is hidden": pd.read_csv('data/common_missing_variables_test')["Feature 1 is hidden"].tolist(),
+#          "Feature 2 is hidden": pd.read_csv('data/common_missing_variables_test')["Feature 2 is hidden"].tolist(),
+#          "Feature 3 is hidden": pd.read_csv('data/common_missing_variables_test')["Feature 3 is hidden"].tolist(),
+#          "Feature 4 is hidden": pd.read_csv('data/common_missing_variables_test')["Feature 4 is hidden"].tolist()})
+#     data.to_csv("data/common_missing_variables_test")
+#     data.boxplot(vert=False)
+#     plt.xlabel(f"Absolute Error ({i} iterations)")
+#     plt.title("Error variance compared to true ATE | PSM")
+#     plt.subplots_adjust(left=0.35)
+#     plt.show()
+#
+#
+# def experiment_me_common_missing_variables_ATE(i=100):
+#     f0 = generate_common_missing_variables(i, ex_features=["feature_0"])
+#     f1 = generate_common_missing_variables(i, ex_features=["feature_1"])
+#     f01 = generate_common_missing_variables(i, ex_features=["feature_0", "feature_1"])
+#     data = pd.DataFrame(
+#         {"Baseline": pd.read_csv("data/baseline_common_missing_variables_res")["Baseline"].tolist()[:i],
+#          "Feature 0 is hidden": f0,
+#          "Feature 1 is hidden": f1,
+#          "Features 0 and 1 are hidden": f01})
+#     data.to_csv("data/me_common_missing_variables_test")
+#     data.boxplot(vert=False)
+#     plt.xlabel(f"Absolute Error ({i} iterations)")
+#     plt.title("Error variance compared to true ATE | Main Effect")
+#     plt.subplots_adjust(left=0.35)
+#     plt.show()
+#
+#
+# def experiment_te_common_missing_variables_ATE(i=100):
+#     f0 = generate_common_missing_variables(i, ex_features=["feature_2"])
+#     f1 = generate_common_missing_variables(i, ex_features=["feature_3"])
+#     f01 = generate_common_missing_variables(i, ex_features=["feature_2", "feature_3"])
+#     data = pd.DataFrame(
+#         {"Baseline": pd.read_csv("data/baseline_common_missing_variables_res")["Baseline"].tolist()[:i],
+#          "Feature 2 is hidden": f0,
+#          "Feature 3 is hidden": f1,
+#          "Features 2 and 3 are hidden": f01})
+#     data.to_csv("data/te_common_missing_variables_test")
+#     data.boxplot(vert=False)
+#     plt.xlabel(f"Absolute Error ({i} iterations)")
+#     plt.title("Error variance compared to true ATE | Treatment Effect")
+#     plt.subplots_adjust(left=0.35)
+#     plt.show()
+#
+#
+# def experiment_tp_common_missing_variables_ATE(i=100):
+#     f0 = generate_common_missing_variables(i, ex_features=["feature_4"])
+#     f1 = generate_common_missing_variables(i, ex_features=["feature_5"])
+#     f01 = generate_common_missing_variables(i, ex_features=["feature_4", "feature_5"])
+#     data = pd.DataFrame(
+#         {"Baseline": pd.read_csv("data/baseline_common_missing_variables_res")["Baseline"].tolist()[:i],
+#          "Feature 4 is hidden": f0,
+#          "Feature 5 is hidden": f1,
+#          "Features 4 and 5 are hidden": f01})
+#     data.to_csv("data/tp_common_missing_variables_test")
+#     data.boxplot(vert=False)
+#     plt.xlabel(f"Absolute Error ({i} iterations)")
+#     plt.title("Error variance compared to true ATE | Treatment Propensity")
+#     plt.subplots_adjust(left=0.35)
+#     plt.show()
+#
+#
+# def experiment_nc_common_missing_variables_ATE(i=100):
+#     f0 = generate_common_missing_variables(i, ex_features=["feature_6"])
+#     f1 = generate_common_missing_variables(i, ex_features=["feature_7"])
+#     f01 = generate_common_missing_variables(i, ex_features=["feature_6", "feature_7"])
+#     data = pd.DataFrame(
+#         {"Baseline": pd.read_csv("data/baseline_common_missing_variables_res")["Baseline"].tolist()[:i],
+#          "Feature 6 is hidden": f0,
+#          "Feature 7 is hidden": f1,
+#          "Features 6 and 7 are hidden": f01})
+#     data.to_csv("data/nc_common_missing_variables_test")
+#     data.boxplot(vert=False)
+#     plt.xlabel(f"Absolute Error ({i} iterations)")
+#     plt.title("Error variance compared to true ATE | Non-Confounders")
+#     plt.subplots_adjust(left=0.35)
+#     plt.show()
+#
+#
+# def graph_me_common_hidden_variables_ATE():
+#     data = pd.DataFrame(
+#         {"Baseline": pd.read_csv("data/me_common_missing_variables_res")["Baseline"].tolist(),
+#          "Feature 0 is hidden": pd.read_csv("data/me_common_missing_variables_res")[
+#              "Feature 0 is hidden"].tolist(),
+#          "Feature 1 is hidden": pd.read_csv("data/me_common_missing_variables_res")[
+#              "Feature 1 is hidden"].tolist(),
+#          "Features 0 and 1 are hidden": pd.read_csv("data/me_common_missing_variables_res")[
+#              "Features 0 and 1 are hidden"].tolist()})
+#     data.boxplot(vert=False)
+#     plt.xlabel("Absolute Error (100 iterations)")
+#     plt.title("Error variance compared to true ATE | Main Effect")
+#     plt.subplots_adjust(left=0.35)
+#     plt.show()
+#
+#
+# def graph_te_common_hidden_variables_ATE():
+#     data = pd.DataFrame(
+#         {"Baseline": pd.read_csv("data/te_common_missing_variables_test")["Baseline"].tolist(),
+#          "Feature 2 is hidden": pd.read_csv("data/te_common_missing_variables_test")[
+#              "Feature 2 is hidden"].tolist(),
+#          "Feature 3 is hidden": pd.read_csv("data/te_common_missing_variables_test")[
+#              "Feature 3 is hidden"].tolist(),
+#          "Features 2 and 3 are hidden": pd.read_csv("data/te_common_missing_variables_test")[
+#              "Features 2 and 3 are hidden"].tolist()})
+#     data.boxplot(vert=False)
+#     plt.xlabel("Absolute Error (100 iterations)")
+#     plt.title("Error variance compared to true ATE | Treatment Effect")
+#     plt.subplots_adjust(left=0.35)
+#     plt.show()
+#
+#
+# def graph_tp_common_hidden_variables_ATE():
+#     data = pd.DataFrame(
+#         {"Baseline": pd.read_csv("data/tp_common_missing_variables_test")["Baseline"].tolist(),
+#          "Feature 4 is hidden": pd.read_csv("data/tp_common_missing_variables_test")[
+#              "Feature 4 is hidden"].tolist(),
+#          "Feature 5 is hidden": pd.read_csv("data/tp_common_missing_variables_test")[
+#              "Feature 5 is hidden"].tolist(),
+#          "Features 4 and 5 are hidden": pd.read_csv("data/tp_common_missing_variables_test")[
+#              "Features 4 and 5 are hidden"].tolist()})
+#     data.boxplot(vert=False)
+#     plt.xlabel("Absolute Error (100 iterations)")
+#     plt.title("Error variance compared to true ATE | Treatment Propensity")
+#     plt.subplots_adjust(left=0.35)
+#     plt.show()
+#
+#
+# def graph_nc_common_hidden_variables_ATE():
+#     data = pd.DataFrame(
+#         {"Baseline": pd.read_csv("data/nc_common_missing_variables_test")["Baseline"].tolist(),
+#          "Feature 6 is hidden": pd.read_csv("data/nc_common_missing_variables_test")[
+#              "Feature 6 is hidden"].tolist(),
+#          "Feature 7 is hidden": pd.read_csv("data/nc_common_missing_variables_test")[
+#              "Feature 7 is hidden"].tolist(),
+#          "Features 6 and 7 are hidden": pd.read_csv("data/nc_common_missing_variables_test")[
+#              "Features 6 and 7 are hidden"].tolist()})
+#     data.boxplot(vert=False)
+#     plt.xlabel("Absolute Error (100 iterations)")
+#     plt.title("Error variance compared to true ATE | Non-Confounders")
+#     plt.subplots_adjust(left=0.35)
+#     plt.show()
 
 
 def evh_final():
@@ -559,6 +695,7 @@ def evh_final():
 
     plt.show()
 
+
 def enhv_final():
     res_sum = {0: 0.028011694277565558, 1: 0.29120315354215814, 2: 0.5822664872520664, 3: 0.8418340820445402,
                4: 1.088108762834208, 5: 1.3296631577041529}
@@ -576,14 +713,12 @@ def enhv_final():
     plt.legend()
     # plt.show()
 
+
 if __name__ == '__main__':
     # data = pd.read_csv("data/data_dump_common_8f/generated_dataSun_May_29_19-55-12_2022.csv")
-    # f_dimensions = 5
-    # trueATE = 1
-    # pop = 5000
-    # iterations = 100
+    f_dimensions = 6
+    trueATE = 1
+    pop = 2500
+    iterations = 100
 
-    enhv_final()
-    evh_final()
-
-
+    experiment_common_missing_variables_ATE_LR(100)
