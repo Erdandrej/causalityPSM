@@ -87,11 +87,11 @@ def generate_basic_data(population, dimensions=5, gt_ate=1, save=True):
     return df
 
 
-def generate_3cv_3ncf_data(population, dimensions=6, gt_ate=1, save=False):
+def generate_f4me_data(population, dimensions=5, gt_ate=1, save=True):
     feature_function = lambda xs: np.sum(xs)
-    main_effect = lambda xs: feature_function(xs[0:3])
-    treatment_effect = lambda xs: feature_function(xs[0:3]) + gt_ate
-    treatment_propensity = lambda xs: sigmoid(feature_function(xs[0:3]) + np.random.normal())
+    main_effect = lambda xs: feature_function(xs)
+    treatment_effect = lambda xs: feature_function(xs[:dimensions - 1]) + gt_ate
+    treatment_propensity = lambda xs: sigmoid(feature_function(xs[:dimensions - 1]) + np.random.normal())
     noise = lambda: np.random.normal()
     treatment_function = lambda p, n: np.random.binomial(1, p)
     outcome_function = lambda me, t, te, n: me + te * t + n
@@ -103,11 +103,43 @@ def generate_3cv_3ncf_data(population, dimensions=6, gt_ate=1, save=False):
     return df
 
 
-def generate_f4me_data(population, dimensions=5, gt_ate=1, save=True):
+def generate_f4te_data(population, dimensions=5, gt_ate=1, save=True):
     feature_function = lambda xs: np.sum(xs)
-    main_effect = lambda xs: feature_function(xs)
+    main_effect = lambda xs: feature_function(xs[:dimensions - 1])
     treatment_effect = lambda xs: feature_function(xs) + gt_ate
+    treatment_propensity = lambda xs: sigmoid(feature_function(xs[:dimensions - 1]) + np.random.normal())
+    noise = lambda: np.random.normal()
+    treatment_function = lambda p, n: np.random.binomial(1, p)
+    outcome_function = lambda me, t, te, n: me + te * t + n
+    f_distribution = [lambda: 0.5 * np.random.normal()]
+    g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
+                  outcome_function, dimensions, f_distribution, name=f"basic_{dimensions}f")
+    df = g.generate_data(population, save_data=save)
+    # print("Data generation done")
+    return df
+
+
+def generate_f4tp_data(population, dimensions=5, gt_ate=1, save=True):
+    feature_function = lambda xs: np.sum(xs)
+    main_effect = lambda xs: feature_function(xs[:dimensions - 1])
+    treatment_effect = lambda xs: feature_function(xs[:dimensions - 1]) + gt_ate
     treatment_propensity = lambda xs: sigmoid(feature_function(xs) + np.random.normal())
+    noise = lambda: np.random.normal()
+    treatment_function = lambda p, n: np.random.binomial(1, p)
+    outcome_function = lambda me, t, te, n: me + te * t + n
+    f_distribution = [lambda: 0.5 * np.random.normal()]
+    g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
+                  outcome_function, dimensions, f_distribution, name=f"basic_{dimensions}f")
+    df = g.generate_data(population, save_data=save)
+    # print("Data generation done")
+    return df
+
+
+def generate_3cv_3ncf_data(population, dimensions=6, gt_ate=1, save=False):
+    feature_function = lambda xs: np.sum(xs)
+    main_effect = lambda xs: feature_function(xs[0:3])
+    treatment_effect = lambda xs: feature_function(xs[0:3]) + gt_ate
+    treatment_propensity = lambda xs: sigmoid(feature_function(xs[0:3]) + np.random.normal())
     noise = lambda: np.random.normal()
     treatment_function = lambda p, n: np.random.binomial(1, p)
     outcome_function = lambda me, t, te, n: me + te * t + n
@@ -151,66 +183,49 @@ def generate_ff_prod_data(population, dimensions=5, gt_ate=1, save=True):
     return df
 
 
-def generate_common_experiment_data(population, dimensions=8, gt=1, save=True):
-    main_effect = lambda xs: xs[0] + xs[1]
-    treatment_effect = lambda xs: xs[2] + xs[3] + gt
-    treatment_propensity = lambda xs: sigmoid(xs[4] + xs[5] + np.random.normal())
+def generate_l1_ome_data(population, dimensions=5, gt_ate=1):
+    feature_function = lambda xs: np.sum(xs)
+    main_effect = lambda xs: feature_function(xs)
+    treatment_effect = lambda xs: feature_function(xs[:dimensions - 1]) + gt_ate
+    treatment_propensity = lambda xs: sigmoid(feature_function(xs[:dimensions - 1]) + np.random.normal())
     noise = lambda: np.random.normal()
     treatment_function = lambda p, n: np.random.binomial(1, p)
     outcome_function = lambda me, t, te, n: me + te * t + n
     f_distribution = [lambda: 0.5 * np.random.normal()]
     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
-                  outcome_function, dimensions, f_distribution, name=f"common_{dimensions}f")
-    df = g.generate_data(population, save_data=save)
+                  outcome_function, dimensions, f_distribution, name=f"l1_ome_{dimensions}f")
+    g.generate_data(population)
     print("Data generation done")
-    return df
 
 
-#
-#
-# def generate_l1_ome_data(population, dimensions=5, gt_ate=1):
-#     feature_function = lambda xs: np.sum(xs)
-#     main_effect = lambda xs: feature_function(xs)
-#     treatment_effect = lambda xs: feature_function(xs[:dimensions - 1]) + gt_ate
-#     treatment_propensity = lambda xs: sigmoid(feature_function(xs[:dimensions - 1]) + np.random.normal())
-#     noise = lambda: np.random.normal()
-#     treatment_function = lambda p, n: np.random.binomial(1, p)
-#     outcome_function = lambda me, t, te, n: me + te * t + n
-#     f_distribution = [lambda: 0.5 * np.random.normal()]
-#     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
-#                   outcome_function, dimensions, f_distribution, name=f"l1_ome_{dimensions}f")
-#     g.generate_data(population)
-#     print("Data generation done")
-#
-#
-# def generate_l1_ote_data(population, dimensions=5, gt_ate=1):
-#     feature_function = lambda xs: np.sum(xs)
-#     main_effect = lambda xs: feature_function(xs[:dimensions - 1])
-#     treatment_effect = lambda xs: feature_function(xs) + gt_ate
-#     treatment_propensity = lambda xs: sigmoid(feature_function(xs[:dimensions - 1]) + np.random.normal())
-#     noise = lambda: np.random.normal()
-#     treatment_function = lambda p, n: np.random.binomial(1, p)
-#     outcome_function = lambda me, t, te, n: me + te * t + n
-#     f_distribution = [lambda: 0.5 * np.random.normal()]
-#     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
-#                   outcome_function, dimensions, f_distribution, name=f"l1_ote_{dimensions}f")
-#     g.generate_data(population)
-#     print("Data generation done")
-#
-#
-# def generate_l1_otp_data(population, dimensions=5, gt_ate=1):
-#     feature_function = lambda xs: np.sum(xs)
-#     main_effect = lambda xs: feature_function(xs[:dimensions - 1])
-#     treatment_effect = lambda xs: feature_function(xs[:dimensions - 1]) + gt_ate
-#     treatment_propensity = lambda xs: sigmoid(feature_function(xs) + np.random.normal())
-#     noise = lambda: np.random.normal()
-#     treatment_function = lambda p, n: np.random.binomial(1, p)
-#     outcome_function = lambda me, t, te, n: me + te * t + n
-#     f_distribution = [lambda: 0.5 * np.random.normal()]
-#     g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
-#                   outcome_function, dimensions, f_distribution, name=f"l1_otp_{dimensions}f")
-#     g.generate_data(population)
-#     print("Data generation done")
+def generate_l1_ote_data(population, dimensions=5, gt_ate=1):
+    feature_function = lambda xs: np.sum(xs)
+    main_effect = lambda xs: feature_function(xs[:dimensions - 1])
+    treatment_effect = lambda xs: feature_function(xs) + gt_ate
+    treatment_propensity = lambda xs: sigmoid(feature_function(xs[:dimensions - 1]) + np.random.normal())
+    noise = lambda: np.random.normal()
+    treatment_function = lambda p, n: np.random.binomial(1, p)
+    outcome_function = lambda me, t, te, n: me + te * t + n
+    f_distribution = [lambda: 0.5 * np.random.normal()]
+    g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
+                  outcome_function, dimensions, f_distribution, name=f"l1_ote_{dimensions}f")
+    g.generate_data(population)
+    print("Data generation done")
+
+
+def generate_l1_otp_data(population, dimensions=5, gt_ate=1):
+    feature_function = lambda xs: np.sum(xs)
+    main_effect = lambda xs: feature_function(xs[:dimensions - 1])
+    treatment_effect = lambda xs: feature_function(xs[:dimensions - 1]) + gt_ate
+    treatment_propensity = lambda xs: sigmoid(feature_function(xs) + np.random.normal())
+    noise = lambda: np.random.normal()
+    treatment_function = lambda p, n: np.random.binomial(1, p)
+    outcome_function = lambda me, t, te, n: me + te * t + n
+    f_distribution = [lambda: 0.5 * np.random.normal()]
+    g = Generator(main_effect, treatment_effect, treatment_propensity, noise, lambda xs: 0, treatment_function,
+                  outcome_function, dimensions, f_distribution, name=f"l1_otp_{dimensions}f")
+    g.generate_data(population)
+    print("Data generation done")
 
 
 # def generate_l1_otetp_data(population, dimensions=5, gt_ate=1):
@@ -672,7 +687,7 @@ def experiment_common_missing_variables_ATE_LR(i=100):
 
 def evh_final():
     labels = ['f_0', 'f_1', 'f_2', 'f_3', 'f_4']
-    base_d = [0.29970, 0.29077, 0.32853, 0.32705, 0.31669]
+    base_d = experiment_effect_of_hidden_variables_ATE()
     f4ome_d = [0.11514, 0.12383, 0.11424, 0.10645, 0.05896]
     f4ote_d = [0.21734, 0.20527, 0.21034, 0.22013, 0.05151]
     f4otp_d = [0.05386, 0.06667, 0.06107, 0.07350, 0.05455]
@@ -716,9 +731,50 @@ def enhv_final():
 
 if __name__ == '__main__':
     # data = pd.read_csv("data/data_dump_common_8f/generated_dataSun_May_29_19-55-12_2022.csv")
-    f_dimensions = 6
+    f_dimensions = 5
     trueATE = 1
     pop = 2500
     iterations = 100
 
-    experiment_common_missing_variables_ATE_LR(100)
+    labels = ['f_0', 'f_1', 'f_2', 'f_3', 'f_4']
+
+    base_d = []
+    f4ome_d = []
+    f4ote_d = []
+    f4otp_d = []
+    for x in tqdm(range(iterations)):
+        base_d.append(list(experiment_effect_of_hidden_variables_ATE(
+            generate_basic_data(population=pop, dimensions=f_dimensions, gt_ate=trueATE, save=False),
+            gt=trueATE).values()))
+        f4ome_d.append(list(experiment_effect_of_hidden_variables_ATE(
+            generate_f4me_data(population=pop, dimensions=f_dimensions, gt_ate=trueATE, save=False),
+            gt=trueATE).values()))
+        f4ote_d.append(list(experiment_effect_of_hidden_variables_ATE(
+            generate_f4te_data(population=pop, dimensions=f_dimensions, gt_ate=trueATE, save=False),
+            gt=trueATE).values()))
+        f4otp_d.append(list(experiment_effect_of_hidden_variables_ATE(
+            generate_f4tp_data(population=pop, dimensions=f_dimensions, gt_ate=trueATE, save=False),
+            gt=trueATE).values()))
+
+    base_d = np.array(base_d).mean(axis=0)
+    f4ome_d = np.array(f4ome_d).mean(axis=0)
+    f4ote_d = np.array(f4ote_d).mean(axis=0)
+    f4otp_d = np.array(f4otp_d).mean(axis=0)
+
+    x = np.arange(len(labels))  # the label locations
+    width = 0.2  # the width of the bars
+
+    fig, ax = plt.subplots()
+    rects1 = ax.bar(x - width * (3 / 2), base_d, width, label='A')
+    rects2 = ax.bar(x - width / 2, f4ome_d, width, label='B')
+    rects3 = ax.bar(x + width / 2, f4ote_d, width, label='C')
+    rects4 = ax.bar(x + width * (3 / 2), f4otp_d, width, label='D')
+
+    # Add some text for labels, title and custom x-axis tick labels, etc.
+    ax.set_xlabel(f'Feature Hidden ({iterations} iterations)')
+    ax.set_ylabel('MAE')
+    ax.set_title('Error when each variable is hidden separately (ATE)')
+    ax.set_xticks(x, labels)
+    ax.legend()
+
+    plt.show()
