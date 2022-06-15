@@ -151,7 +151,7 @@ def generate_6evh_data(population, dimensions=6, gt_ate=1, save=False):
     return df
 
 
-def experiment_number_of_hidden_variables_ATE(df, dimensions=6):
+def experiment_number_of_hidden_variables_ATE(df, dimensions=6, lr=False):
     psm = PropensityScoreMatching()
     number_hidden_variables = 0
     gt_ate = getATE(df)
@@ -160,7 +160,8 @@ def experiment_number_of_hidden_variables_ATE(df, dimensions=6):
         ires = []
         for fd in tqdm(fdl):
             with HiddenPrints():
-                psm_ate = psm.estimate_ATE(df, "treatment", "outcome", fd)
+                psm_ate = psm.estimate_ATE(df, "treatment", "outcome", fd) if \
+                    (not lr) else estimate_ATE_Linear_Regression(df, fd)
             ires.append(np.square(psm_ate - gt_ate))
         results[number_hidden_variables] = np.sqrt(np.mean(ires))
         number_hidden_variables += 1
@@ -176,9 +177,8 @@ def experiment_effect_of_hidden_variables_ATE(df, dimensions=6, lr=False):
         fd = all_f.copy()
         fd.pop(f'feature_{i}')
         with HiddenPrints():
-            psm_ate = psm.estimate_ATE(df, "treatment", "outcome", fd) if (not lr) else estimate_ATE_Linear_Regression(
-                df,
-                fd)
+            psm_ate = psm.estimate_ATE(df, "treatment", "outcome", fd) if \
+                (not lr) else estimate_ATE_Linear_Regression(df, fd)
         results[f'feature_{i}'] = np.abs(psm_ate - getATE(df))
 
     return results
@@ -201,6 +201,8 @@ def generate_common_missing_variables(i=100, ex_features=None, f_dimensions=6):
 
 
 def estimate_ATE_Linear_Regression(df, fd):
+    if len(fd) == 0:
+        return 0
     features = fd.keys()
     t0_data = df[df['treatment'] == 0.0]
     t1_data = df[df['treatment'] == 1.0]
@@ -217,7 +219,8 @@ def estimate_ATE_Linear_Regression(df, fd):
     regY1 = linear_model.LinearRegression()
     regY1.fit(t1_X, t1_y)
 
-    res = (regY1.predict(df[features].to_numpy()) - regY0.predict(df[features].to_numpy())).mean()
+    res = (regY1.predict(df[features].to_numpy()) -
+           regY0.predict(df[features].to_numpy())).mean()
     return res
 
 
@@ -308,19 +311,19 @@ def evh_final(iterations=100, lr=False):
     plt.show()
 
 
-def enhv_final(dim=6):
+def enhv_final(dim=6, lr=False):
     pop = 2500
     res_sum = experiment_number_of_hidden_variables_ATE(generate_basic_data(pop, dimensions=dim, save=False),
-                                                        dimensions=dim)
+                                                        dimensions=dim, lr=lr)
     res_halfsum = experiment_number_of_hidden_variables_ATE(generate_ff_halfsum_data(pop, dimensions=dim, save=False),
-                                                            dimensions=dim)
+                                                            dimensions=dim, lr=lr)
     res_prod = experiment_number_of_hidden_variables_ATE(generate_ff_prod_data(pop, dimensions=dim, save=False),
-                                                         dimensions=dim)
+                                                         dimensions=dim, lr=lr)
 
-    plt.plot(res_sum.keys(), res_sum.values(), label="A")
-    plt.plot(res_halfsum.keys(), res_halfsum.values(), label="B")
-    plt.plot(res_prod.keys(), res_prod.values(), label="C")
-    plt.title("Error proportional to hidden variables (ATE)")
+    plt.plot(list(res_sum.keys())[:-1], list(res_sum.values())[:-1], label="A")
+    plt.plot(list(res_halfsum.keys())[:-1], list(res_halfsum.values())[:-1], label="B")
+    plt.plot(list(res_prod.keys())[:-1], list(res_prod.values())[:-1], label="C")
+    plt.title('Error proportional to hidden variables (ATE) | ' + ('PSM' if not lr else "LR"))
     plt.xlabel("Number of hidden variables")
     plt.ylabel("RMSE")
     plt.legend()
@@ -329,7 +332,4 @@ def enhv_final(dim=6):
 
 if __name__ == '__main__':
     # data = pd.read_csv("data/data_dump_common_8f/generated_dataSun_May_29_19-55-12_2022.csv")
-    f_dimensions = 5
-    pop = 2500
-
     enhv_final(6)
