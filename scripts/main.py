@@ -239,6 +239,11 @@ def generate_common_missing_variables_linear_regression(i=100, ex_features=None,
     return res
 
 
+"""
+Experiment 1
+"""
+
+
 def experiment_common_missing_variables_ATE(i=100):
     b = generate_common_missing_variables(i)
     f0 = generate_common_missing_variables(i, ex_features=["feature_0"])
@@ -287,6 +292,11 @@ def experiment_common_missing_variables_ATE_LR(i=100):
     plt.show()
 
 
+"""
+Experiment 2
+"""
+
+
 def evh_final(iterations=100, lr=False):
     f_dimensions = 6
     pop = 2500
@@ -311,6 +321,11 @@ def evh_final(iterations=100, lr=False):
     plt.show()
 
 
+"""
+Experiment 3
+"""
+
+
 def enhv_final(dim=6, lr=False):
     pop = 2500
     res_sum = experiment_number_of_hidden_variables_ATE(generate_basic_data(pop, dimensions=dim, save=False),
@@ -332,4 +347,4 @@ def enhv_final(dim=6, lr=False):
 
 if __name__ == '__main__':
     # data = pd.read_csv("data/data_dump_common_8f/generated_dataSun_May_29_19-55-12_2022.csv")
-    enhv_final(6)
+    evh_final()
