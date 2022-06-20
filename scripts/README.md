@@ -1,0 +1,7 @@
+# Research Project CSE3000 2022
+
+This repository links to the work of students for the Research project course of the CSE bachelor at TU Delft.
+
+Please see their projects [here](https://cse3000-research-project.github.io/).
+
+## An empirical study of the effects of unconfoundedness on the performance of Propensity Score Matching
